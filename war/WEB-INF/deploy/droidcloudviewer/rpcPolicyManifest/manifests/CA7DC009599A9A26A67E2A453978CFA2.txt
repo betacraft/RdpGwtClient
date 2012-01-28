@@ -1,0 +1,2 @@
+serviceClass: com.droidcloud.viewer.client.GreetingService
+path: A8C05F0C3BABDF14B3A4F4F4824E9689.gwt.rpc
