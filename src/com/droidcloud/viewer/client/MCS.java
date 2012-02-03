@@ -16,13 +16,17 @@ import java.io.*;
 
 
 import com.droidcloud.viewer.client.crypto.CryptoException;
+import com.droidcloud.viewer.client.events.McsRecievedEvent;
+import com.droidcloud.viewer.client.events.McsRecievedEventHandler;
+import com.droidcloud.viewer.client.events.SecureRecievedEvent;
 import com.droidcloud.viewer.client.rdp5.VChannels;
 import com.google.gwt.core.client.GWT;
+import com.google.gwt.event.shared.HandlerManager;
 
 
 public class MCS {
 	
-    private ISO IsoLayer=null;
+    public ISO IsoLayer=null;
     private int McsUserID;
 
     /* this for the MCS Layer */
@@ -50,6 +54,10 @@ public class MCS {
     private VChannels channels;
     private Options option;
     private Secure secureChannel;
+    private HandlerManager eventBus;
+    private int status = 0;
+    private RdpPacket_Localised pack;
+    private Rdp rdpL;
 
     /**
      * Initialise the MCS layer (and lower layers) with provided channels
@@ -62,6 +70,7 @@ public class MCS {
     	IsoLayer = new ISO_Localised();
         this.option = option;
         this.secureChannel = secureChannel;
+        eventBus = DroidCloudViewer.eventBus;
     }
     
     /**
@@ -77,27 +86,158 @@ public class MCS {
      */
     public void connect(String host, int port, RdpPacket_Localised data, Rdp rdpLayer)  throws IOException, RdesktopException, OrderException, CryptoException {
 	//logger.debug("MCS.connect");
-    IsoLayer.connect(host, port, option, rdpLayer);
-
-    this.sendConnectInitial(data);
-	this.receiveConnectResponse(data, rdpLayer);
-
-    //logger.debug("connect response received");
-    
-	send_edrq();
-	send_aurq();
-
-	this.McsUserID=receive_aucf(rdpLayer);
-	send_cjrq(this.McsUserID+MCS_USERCHANNEL_BASE);
-	receive_cjcf(rdpLayer);
-	send_cjrq(MCS_GLOBAL_CHANNEL);
-	receive_cjcf(rdpLayer);
-	
-	for (int i = 0; i < channels.num_channels(); i++)
-	{
-		send_cjrq(channels.mcs_id(i));
-		receive_cjcf(rdpLayer);
-	}
+    	this.pack = data;
+    	this.rdpL = rdpLayer;
+    	status = -1;
+    IsoLayer.connect(host, port, option, rdpLayer);    
+    eventBus.addHandler(McsRecievedEvent.TYPE, new McsRecievedEventHandler() {
+		
+		@Override
+		public void onReceived(McsRecievedEvent event) {
+			if( status == -1)
+			{
+				try {
+					GWT.log("message: -1");
+					sendConnectInitial(pack);
+					status = 0;
+					IsoLayer.setListner(new int[1], option, rdpL, new McsRecievedEvent());
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (RdesktopException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}			    			
+			}
+			else if(status == 0)
+			{
+				try {
+					GWT.log("message: 0");
+					receiveConnectResponse(pack, rdpL);
+					send_edrq();
+					send_aurq();
+					status = 1;
+					IsoLayer.setListner(new int[1], option, rdpL, new McsRecievedEvent());
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (RdesktopException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (OrderException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (CryptoException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			else if(status == 1)
+			{
+				try {
+					GWT.log("message: 1");
+					McsUserID=receive_aucf(rdpL);
+					send_cjrq(McsUserID+MCS_USERCHANNEL_BASE);
+					status = 2;
+					IsoLayer.setListner(new int[1], option, rdpL, new McsRecievedEvent());
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (RdesktopException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (OrderException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (CryptoException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}				
+			}
+			else if( status == 2)
+			{
+				try {
+					GWT.log("message: 2");
+					receive_cjcf(rdpL);
+					send_cjrq(MCS_GLOBAL_CHANNEL);
+					status = 3;
+					IsoLayer.setListner(new int[1], option, rdpL, new McsRecievedEvent());
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (RdesktopException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (OrderException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (CryptoException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+								
+			}
+			else if( status == 3)
+			{
+				try {
+					GWT.log("message: 3");
+					receive_cjcf(rdpL);
+					if(channels.num_channels() > 0)
+					{
+						send_cjrq(channels.mcs_id(0));
+						status  = 4;
+						IsoLayer.setListner(new int[1], option, rdpL, new McsRecievedEvent());
+					}
+					else
+					{
+						eventBus.fireEvent(new SecureRecievedEvent());
+					}
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (RdesktopException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (OrderException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (CryptoException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			else if( status < (4 + channels.num_channels()))
+			{
+				status ++;
+				try {
+					send_cjrq(channels.mcs_id(status-4));
+					receive_cjcf(rdpL);
+					if(status < (4 + channels.num_channels()))
+					{
+						IsoLayer.setListner(new int[1], option, rdpL, new McsRecievedEvent());
+					}
+					else
+					{						
+						eventBus.fireEvent(new SecureRecievedEvent());						
+					}
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (RdesktopException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (OrderException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (CryptoException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}				
+			}
+			
+		}
+	});    	   	
+		
 
     }
     
@@ -340,6 +480,7 @@ public class MCS {
      */
     public void sendConnectInitial(RdpPacket_Localised data) throws IOException, RdesktopException {
         //logger.debug("MCS.sendConnectInitial");
+    	GWT.log("MCS.sendConnectInitial");
     if(false){
         int length = 7 + (3 *34) + 4 + data.getEnd();
         RdpPacket_Localised buffer = IsoLayer.init(length+5);
@@ -371,8 +512,8 @@ public class MCS {
 					domainParamSize(34, 2, 0, 0xffff) + 
 					domainParamSize(1, 1, 1, 0x420) + 
 					domainParamSize(0xffff, 0xfc17, 0xffff, 0xffff) + 
-					4 + datalen; // RDP5 Code
-    
+					4 + datalen; // RDP5 Code	
+    GWT.log("mcslength:"+length+" datalength:"+datalen);
 	RdpPacket_Localised buffer = IsoLayer.init(length+5);
 	
 	sendBerHeader(buffer, CONNECT_INITIAL, length);
@@ -393,6 +534,7 @@ public class MCS {
 	data.copyToPacket(buffer, 0, buffer.getPosition(), data.getEnd());
 	buffer.incrementPosition(data.getEnd());
 	buffer.markEnd();
+	GWT.log("sending MCS.sendConnectInitial");
 	IsoLayer.send(buffer, option);
     }
 

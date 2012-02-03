@@ -14,7 +14,7 @@ public class ReceiveMessageEvent extends GwtEvent<RecieveMessageEventHandler> {
 
 	@Override
 	protected void dispatch(RecieveMessageEventHandler handler) {
-
+		handler.onReceived(this);
 	}
 
 	

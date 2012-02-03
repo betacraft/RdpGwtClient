@@ -17,6 +17,8 @@
 
 package com.droidcloud.viewer.client.tools;
 
+import com.google.gwt.core.client.GWT;
+
 
 /**
  * Abstract superclass for Base-N encoders and decoders.
@@ -336,7 +338,7 @@ public abstract class BaseNCodec implements BinaryEncoder, BinaryDecoder {
         encode(pArray, 0, pArray.length);
         encode(pArray, 0, -1); // Notify encoder of EOF.
         byte[] buf = new byte[pos - readPos];
-        readResults(buf, 0, buf.length);
+        readResults(buf, 0, buf.length);        
         return buf;
     }
     

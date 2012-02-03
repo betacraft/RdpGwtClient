@@ -14,7 +14,7 @@ public class SecureRecievedEvent extends GwtEvent<SecureRecievedEventHandler> {
 
 	@Override
 	protected void dispatch(SecureRecievedEventHandler handler) {
-
+		handler.onReceived(this);
 	}
 
 	

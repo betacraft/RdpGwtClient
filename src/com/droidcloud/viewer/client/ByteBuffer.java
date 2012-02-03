@@ -22,7 +22,7 @@ public class ByteBuffer {
 	public static ByteBuffer allocateDirect(int capacity) {
 		ByteBuffer bb = new ByteBuffer();
 		bb.barray = new ArrayList<Byte>(capacity);
-		for(int i=0;i<capacity;i++)
+		for (int i = 0; i < capacity; i++)
 			bb.barray.add((byte) 0);
 		GWT.log("" + capacity);
 		bb.capacity = capacity;
@@ -41,7 +41,7 @@ public class ByteBuffer {
 	}
 
 	public void put(int where, byte what) {
-	//	GWT.log("currentpos " + currentPosition + " size" + barray.size());
+		// GWT.log("currentpos " + currentPosition + " size" + barray.size());
 		if (where < barray.size())
 			barray.set(where, what);
 		else {
@@ -56,7 +56,7 @@ public class ByteBuffer {
 	}
 
 	public void put(byte what) {
-//		GWT.log("currentpos " + currentPosition);
+		// GWT.log("currentpos " + currentPosition);
 		if (currentPosition < barray.size())
 			barray.set(currentPosition++, what);
 		else {
@@ -78,8 +78,8 @@ public class ByteBuffer {
 
 	public void put(byte[] array, int array_offset, int len) {
 		for (int i = 0; i < len; i++) {
-			if ((currentPosition+array_offset + i) < capacity)
-				barray.set(currentPosition+array_offset + i, array[i]);
+			if ((currentPosition + array_offset + i) < capacity)
+				barray.set(currentPosition + array_offset + i, array[i]);
 			else {
 				barray.add(array[i]);
 				capacity = barray.size();
@@ -88,13 +88,13 @@ public class ByteBuffer {
 	}
 
 	public void get(byte[] array, int array_offset, int len) {
-		if (array != null) {
-			if (array.length < len)
-				array = new byte[len];
-		} else
-			array = new byte[len];
+		/*
+		 * if (array != null) { if (array.length < len) array = new byte[len]; }
+		 * else array = new byte[len];
+		 */
+		GWT.log("copying bytes: " + len);
 		for (int i = 0; i < len; i++) {
-			array[i] = barray.get(array_offset + i);
+			array[i] = barray.get(currentPosition + array_offset + i);
 		}
 	}
 
@@ -126,8 +126,10 @@ public class ByteBuffer {
 		byte second;
 		first = (byte) (what & 0x0f);
 		second = (byte) ((what >> 8) & 0xf);
-	/*	GWT.log("currentpos " + currentPosition + " putting short at " + where
-				+ " size " + barray.size());*/		
+		/*
+		 * GWT.log("currentpos " + currentPosition + " putting short at " +
+		 * where + " size " + barray.size());
+		 */
 		if (ORDER == BIG_ENDIAN32) {
 			if (where > (capacity - 2)) {
 				barray.add(second);
@@ -149,7 +151,7 @@ public class ByteBuffer {
 	}
 
 	public void putShort(short what) {
-//		GWT.log("currentpos putshort" + currentPosition);
+		// GWT.log("currentpos putshort" + currentPosition);
 		putShort(currentPosition, what);
 		currentPosition += 2;
 
@@ -169,7 +171,9 @@ public class ByteBuffer {
 
 			return r;
 		}
-		throw new IndexOutOfBoundsException("get int index out of bounds, where:"+where+" size:"+barray.size()+" capacity:"+capacity);
+		throw new IndexOutOfBoundsException(
+				"get int index out of bounds, where:" + where + " size:"
+						+ barray.size() + " capacity:" + capacity);
 	}
 
 	public int getInt() {
@@ -202,6 +206,7 @@ public class ByteBuffer {
 
 	public void putInt(int what) {
 		putInt(currentPosition, what);
+		currentPosition += 4;
 	}
 
 	public void position(int i) {

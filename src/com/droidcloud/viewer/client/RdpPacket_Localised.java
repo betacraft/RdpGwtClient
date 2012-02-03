@@ -66,7 +66,7 @@ public class RdpPacket_Localised extends RdpPacket {
 	if (bb.position() >= bb.capacity()) { 
 		throw new ArrayIndexOutOfBoundsException("memory accessed out of Range!"); 
 	}
-	return bb.get()&0xf; // treat as unsigned byte
+	return bb.get()&0xff; // treat as unsigned byte
 	}
 
 	public void copyFromByteArray(byte[] array, int array_offset, int mem_offset, int len){

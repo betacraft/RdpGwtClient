@@ -14,7 +14,7 @@ public class McsRecievedEvent extends GwtEvent<McsRecievedEventHandler> {
 
 	@Override
 	protected void dispatch(McsRecievedEventHandler handler) {
-
+		handler.onReceived(this);
 	}
 
 	

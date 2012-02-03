@@ -12,6 +12,7 @@
 package com.droidcloud.viewer.client;
 
 import java.io.IOException;
+import java.util.LinkedList;
 
 import net.zschech.gwt.websockets.client.CloseHandler;
 import net.zschech.gwt.websockets.client.ErrorHandler;
@@ -21,55 +22,88 @@ import net.zschech.gwt.websockets.client.OpenHandler;
 import net.zschech.gwt.websockets.client.WebSocket;
 
 import com.droidcloud.viewer.client.crypto.CryptoException;
+import com.droidcloud.viewer.client.events.McsRecievedEvent;
+import com.droidcloud.viewer.client.events.RdpRecievedEvent;
+import com.droidcloud.viewer.client.events.ReceiveMessageEvent;
 import com.droidcloud.viewer.client.tools.Base64;
 import com.google.gwt.core.client.GWT;
+import com.google.gwt.event.shared.EventBus;
+import com.google.gwt.event.shared.EventHandler;
+import com.google.gwt.event.shared.GwtEvent;
+import com.google.gwt.event.shared.HandlerManager;
+import com.google.gwt.user.client.Timer;
 
-public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,ErrorHandler {
+public abstract class ISO implements OpenHandler, CloseHandler, MessageHandler,
+		ErrorHandler {
 
 	@Override
 	public void onOpen(WebSocket webSocket) {
 		// TODO Auto-generated method stub
 		GWT.log("socket opened ");
+		Timer timer = new Timer() {
+
+			@Override
+			public void run() {
+				//					send_connection_request(__option);
+				GWT.log("opened");
+				while(!toBeSent.isEmpty())
+				{
+					GWT.log("sending connection request: "+toBeSent.getFirst());
+					rdpsock.send(toBeSent.removeFirst());
+				}
+				setListner(new int[1], __option, __rdpLayer, new McsRecievedEvent());
+			}
+		};
+		timer.schedule(1000);
+		opened = true;
 	}
 
 	@Override
 	public void onClose(WebSocket webSocket) {
 		// TODO Auto-generated method stub
 		GWT.log("socket closed");
+		opened = false;
 	}
 
 	@Override
 	public void onMessage(WebSocket webSocket, MessageEvent message) {
+		// stream.
+		if (stream == null)
+			stream = new LinkedList<Byte>();
+
 		GWT.log("message received");
 		byte[] tmp1 = Base64.decodeBase64(message.getData());
-		if(in == null)
-		{
-			in = new byte[tmp1.length];
+		for (int i = 0; i < tmp1.length; i++) {
+			stream.add(tmp1[i]);
 		}
-		byte[] tmp = in;
-		int length = tmp.length + tmp1.length;		
-		in = new byte[length];
-		for (int i = 0; i < length; i++) {
-			if (i < tmp.length)
-				in[i] = tmp[i];
-			else
-				in[i] = tmp1[i - tmp.length];
-		}
-		tmp = null;
+		/*
+		 * if(in == null) { in = new byte[tmp1.length]; } byte[] tmp = in; int
+		 * length = tmp.length + tmp1.length; in = new byte[length]; for (int i
+		 * = 0; i < length; i++) { if (i < tmp.length) in[i] = tmp[i]; else
+		 * in[i] = tmp1[i - tmp.length]; } tmp = null;
+		 */
+		String string = new String(tmp1);
 		tmp1 = null;
+		streamLength = stream.size();
+		// GWT.log("message received:"+streamLength+" message:"+string);
 	}
 
 	@Override
 	public void onError(WebSocket webSocket) {
-		GWT.log("websocket error!");		
+		GWT.log("websocket error!");
 	}
 
+	LinkedList<GwtEvent> events;
 	private HexDump dump = null;
-
+	HandlerManager eventBus;
 	protected WebSocket rdpsock = null;
 	// private DataInputStream in = null;
 	// private OutputStream out = null;
 	protected volatile byte[] in = null;
+	LinkedList<Byte> stream = null;
+	int streamLength = 0;
+	boolean first = true;
+	boolean opened = false;
 	/* this for the ISO Layer */
 	private static final int CONNECTION_REQUEST = 0xE0;
 	private static final int CONNECTION_CONFIRM = 0xD0;
@@ -84,6 +118,8 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 	 */
 	public ISO() {
 		dump = new HexDump();
+		eventBus = DroidCloudViewer.eventBus;
+		events = new LinkedList<GwtEvent>();
 
 	}
 
@@ -116,9 +152,9 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 	 * @throws IOException
 	 */
 	protected void doSocketConnect(String host, int port) throws IOException {
-		GWT.log("connecting to : " + "" + host + ":" + port);		
-		this.in = new byte[70]; 
-		this.rdpsock = WebSocket.create("ws://" + host + ":" + port,"base64");
+		GWT.log("connecting to : " + "" + host + ":" + port);
+		this.in = new byte[70];
+		this.rdpsock = WebSocket.create("ws://" + host + ":" + port, "base64");
 		this.rdpsock.setOnOpen(this);
 		this.rdpsock.setOnClose(this);
 		this.rdpsock.setOnError(this);
@@ -153,13 +189,17 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 		/*
 		 * this.out = new DataOutputStream(new BufferedOutputStream(
 		 * rdpsock.getOutputStream()));
-		 */send_connection_request(option);
-
-		receiveMessage(code, option, rdpLayer);
-		if (code[0] != CONNECTION_CONFIRM) {
-			throw new RdesktopException("Expected CC got:"
-					+ Integer.toHexString(code[0]).toUpperCase());
-		}
+		 */
+		this.__option = option;
+		this.__rdpLayer = rdpLayer;
+		send_connection_request(__option);
+		
+		// receiveMessage(code, option, rdpLayer);
+		/*
+		 * if (code[0] != CONNECTION_CONFIRM) { throw new
+		 * RdesktopException("Expected CC got:" +
+		 * Integer.toHexString(code[0]).toUpperCase()); }
+		 */
 
 		/*
 		 * if(Options.use_ssl){ try { rdpsock = this.negotiateSSL(rdpsock);
@@ -195,7 +235,11 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 									// address we use 0
 		buffer.set8(0); // service class
 		buffer.copyToByteArray(packet, 0, 0, packet.length);
-		rdpsock.send(Base64.encodeBase64String(packet));
+		if(opened)
+			rdpsock.send(Base64.encodeBase64String(packet));
+		else
+			toBeSent.add(Base64.encodeBase64String(packet));
+
 	}
 
 	/**
@@ -228,7 +272,15 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 			buffer.copyToByteArray(packet, 0, 0, buffer.getEnd());
 			if (option.isHexdumpDebugEnabled())
 				dump.encode(packet, "SEND"/* //System.out */);
-			rdpsock.send(Base64.encodeBase64String(packet));
+			GWT.log("sending: " + Base64.encodeBase64String(packet));
+			if(opened)
+			{
+				rdpsock.send(Base64.encodeBase64String(packet));
+			}
+			else
+			{
+				toBeSent.add(Base64.encodeBase64String(packet));
+			}
 		}
 	}
 
@@ -246,9 +298,10 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 	public RdpPacket_Localised receive(Options option, Rdp rdpLayer)
 			throws IOException, RdesktopException, OrderException,
 			CryptoException {
-		int[] type = new int[1];
+		int[] type = __type;
 		GWT.log(" receive called at iso");
-		RdpPacket_Localised buffer = receiveMessage(type, option, rdpLayer);
+		RdpPacket_Localised buffer = __s;// receiveMessage(type, option,
+											// rdpLayer);
 		GWT.log("receive end iso");
 		if (buffer == null)
 			return null;
@@ -279,29 +332,20 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 		RdpPacket_Localised buffer = null;
 
 		byte[] packet = new byte[length];
-
-		// in.readFully(packet, 0, length);
-		if (length <= in.length) {
-			GWT.log("right length: "+length+" datalength:"+in.length);
-			for (int i = 0; i < length; i++) {
-				packet[i] = in[i];
-			}
-			GWT.log("done copying");
-			if (in.length > length) {
-				byte[] tmp = new byte[in.length - length];
-				for (int j = 0; j < (in.length - length); j++) {
-					tmp[j] = in[length + j];
-				}
-				in = tmp;
-				tmp = null;
-			}
-			GWT.log("done resetting");
+		for (int i = 0; i < length; i++) {
+			packet[i] = stream.removeFirst();
 		}
-		else
-		{
-			GWT.log("wrong length: "+length+" datalength:"+in.length);
-			return null;
-		}
+		streamLength = stream.size();
+		/*
+		 * // in.readFully(packet, 0, length); if (length <= in.length) {
+		 * GWT.log("right length: "+length+" datalength:"+in.length); for (int i
+		 * = 0; i < length; i++) { packet[i] = in[i]; } GWT.log("done copying");
+		 * if (in.length > length) { byte[] tmp = new byte[in.length - length];
+		 * for (int j = 0; j < (in.length - length); j++) { tmp[j] = in[length +
+		 * j]; } in = tmp; tmp = null; } GWT.log("done resetting"); } else {
+		 * GWT.log("wrong length: "+length+" datalength:"+in.length); return
+		 * null; }
+		 */
 		GWT.log("done packet");
 		// try{ }
 		// catch(IOException e){ //logger.warn("IOException: " +
@@ -331,6 +375,207 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 		}
 
 		return buffer;
+	}
+
+	RdpPacket_Localised __s = null;
+	int __length, __version;
+	int[] __type;
+	Options __option;
+	Rdp __rdpLayer;
+
+	public void setListner(int[] type, Options option, Rdp rdpLayer,
+			GwtEvent event) {
+		events.add(event);
+		__s = null;
+		__type = type;
+		__option = option;
+		__rdpLayer = rdpLayer;
+		if (!events.isEmpty()) {
+			Timer timer = new Timer() {
+
+				@Override
+				public void run() {
+					if (opened) {
+
+						try {
+							nextPacket();
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						} catch (RdesktopException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						} catch (OrderException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						} catch (CryptoException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+
+					} else
+						this.schedule(10);
+				}
+			};
+			timer.schedule(10);
+		}
+	}
+
+	void nextPacket() throws IOException, RdesktopException, OrderException,
+			CryptoException {
+		Timer timer = new Timer() {
+
+			@Override
+			public void run() {
+				 GWT.log("streamlength"+streamLength);
+				
+				if (streamLength >= 4) {
+					try {
+						__s = tcp_recv(null, 4, __option);
+					} catch (IOException e1) {
+						// TODO Auto-generated catch block
+
+					}
+
+					if (__s == null)
+						return;
+					GWT.log("s is not null");
+					__version = __s.get8();
+
+					if (__version == 3) {
+						GWT.log("version is 3");
+						__s.incrementPosition(1); // pad
+						__length = __s.getBigEndian16();
+					} else {
+						GWT.log("version is not 3");
+						__length = __s.get8();
+						GWT.log("length:" + Integer.toHexString(__length));
+						if ((__length & 0x80) != 0) {
+							__length &= ~0x80;
+							GWT.log("length:" + Integer.toHexString(__length));
+							__length = (__length << 8) + __s.get8();
+							GWT.log("length:" + Integer.toHexString(__length));
+						}
+					}
+					GWT.log("out of version thing, length:" + __length);
+					Timer timer = new Timer() {
+
+						@Override
+						public void run() {
+							if (streamLength >= (__length - 4)) {
+								try {
+									__s = tcp_recv(__s, __length - 4, __option);
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									GWT.log("tcpioerror");
+								}
+								if (__s == null)
+									return;
+								if ((__version & 3) == 0) {
+									// logger.info("Processing rdp5 packet");
+
+									try {
+										__rdpLayer.rdp5_process(__s,
+												(__version & 0x80) != 0,
+												__option);
+									} catch (RdesktopException e1) {
+										// TODO Auto-generated catch block
+										e1.printStackTrace();
+									} catch (OrderException e1) {
+										// TODO Auto-generated catch block
+										e1.printStackTrace();
+									} catch (CryptoException e1) {
+										// TODO Auto-generated catch block
+										e1.printStackTrace();
+									}
+
+									try {
+										nextPacket();
+									} catch (IOException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									} catch (RdesktopException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									} catch (OrderException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									} catch (CryptoException e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+
+								} else {
+
+									afterNextPacket();
+								}
+							} else {
+								this.schedule(100);
+							}
+						}
+					};
+					timer.schedule(1);
+				} else {
+					this.schedule(100);
+				}
+			}
+		};
+		timer.schedule(1);
+	}
+
+	void afterNextPacket() {
+		__s.get8();
+		/*
+		 * if (first) { GWT.log("position:" + __s.getPosition() + " end:" +
+		 * __s.getEnd()); byte[] b = new byte[__s.getEnd()];
+		 * __s.copyToByteArray(b, 0, 0, b.length); GWT.log("first done: " +
+		 * Base64.encodeBase64String(b)); }
+		 */
+
+		__type[0] = __s.get8();
+		/*
+		 * GWT.log("Not confirmed:" + Integer.toBinaryString(__type[0]));
+		 * GWT.log("Not confirmed:" +
+		 * Integer.toBinaryString(CONNECTION_CONFIRM));
+		 */
+		if (__type[0] == DATA_TRANSFER) {
+			// logger.debug("Data Transfer Packet");
+			__s.incrementPosition(1); // eot
+			// return __s;
+		} else
+			__s.incrementPosition(5); // dst_ref, src_ref, class
+		if (first) {
+
+			if (__type[0] != CONNECTION_CONFIRM) {
+				rdpsock.close();
+				GWT.log("Not confirmed:" + Integer.toHexString(__type[0]));
+				return;
+			}
+			first = false;
+		}
+
+		GWT.log("calling rdpreceivedEvent");
+		eventBus.fireEvent(events.removeFirst());
+		if(!events.isEmpty())
+		{
+			try {
+				nextPacket();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (RdesktopException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (OrderException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (CryptoException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		// return __s;
+
 	}
 
 	/**
@@ -370,16 +615,16 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 			} else {
 				GWT.log("version is not 3");
 				length = s.get8();
-				GWT.log("length:"+Integer.toHexString(length));
-				if ((length & 0x80) != 0) {					
+				GWT.log("length:" + Integer.toHexString(length));
+				if ((length & 0x80) != 0) {
 					length &= ~0x80;
-					GWT.log("length:"+Integer.toHexString(length));
+					GWT.log("length:" + Integer.toHexString(length));
 					length = (length << 8) + s.get8();
-					GWT.log("length:"+Integer.toHexString(length));
-				}				
+					GWT.log("length:" + Integer.toHexString(length));
+				}
 			}
-			GWT.log("out of version thing, length:"+length);
-			s = tcp_recv(s, length - 4, option);			
+			GWT.log("out of version thing, length:" + length);
+			s = tcp_recv(s, length - 4, option);
 			if (s == null)
 				return null;
 			if ((version & 3) == 0) {
@@ -438,6 +683,7 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 		String uname = option.getUsernameTenCharacterLong();
 		int length = 11 + (option.isUsernameSet() ? ("Cookie: mstshash="
 				.length() + uname.length() + 2) : 0) + 8;
+		GWT.log("length:" + length);
 		RdpPacket_Localised buffer = new RdpPacket_Localised(length);
 		byte[] packet = new byte[length];
 
@@ -465,9 +711,15 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 		 * buffer.set8(Options.use_ssl? 0x01 : 0x00);
 		 * buffer.incrementPosition(3);
 		 */
+		// GWT.log("packet length:"+packet.length);
 		buffer.copyToByteArray(packet, 0, 0, packet.length);
+		// GWT.log("packet length after copy:"+packet.length);
 
-		rdpsock.send(Base64.encodeBase64String(packet));
+		GWT.log(Base64.encodeBase64String(packet));
+		if(opened)
+			rdpsock.send(Base64.encodeBase64String(packet));
+		else
+			toBeSent.add(Base64.encodeBase64String(packet));
 	}
 
 	public void connected() {
@@ -483,4 +735,20 @@ public abstract class ISO implements OpenHandler,CloseHandler,MessageHandler,Err
 
 	}
 
+	/*public void sendToWebsocket(String s)
+	{
+		if(opened)
+		{
+			while(!toBeSent.isEmpty())
+			{
+				rdpsock.send(toBeSent.removeFirst());
+			}
+			rdpsock.send(s);
+		}
+		else
+		{
+			toBeSent.add(s);
+		}
+	}	*/
+	public LinkedList<String> toBeSent = new LinkedList<String>();
 }

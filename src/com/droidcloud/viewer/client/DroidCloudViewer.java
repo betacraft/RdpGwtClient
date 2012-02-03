@@ -1,11 +1,13 @@
 package com.droidcloud.viewer.client;
 
-import net.zschech.gwt.websockets.client.OpenHandler;
-import net.zschech.gwt.websockets.client.WebSocket;
+import java.util.LinkedList;
 
-import com.google.gwt.core.client.Callback;
+import com.droidcloud.viewer.client.events.SecureRecievedEvent;
+import com.droidcloud.viewer.client.events.SecureRecievedEventHandler;
 import com.google.gwt.core.client.EntryPoint;
 import com.google.gwt.core.client.GWT;
+import com.google.gwt.event.shared.GwtEvent;
+import com.google.gwt.event.shared.HandlerManager;
 import com.google.gwt.user.client.Timer;
 
 /**
@@ -19,7 +21,8 @@ public class DroidCloudViewer implements EntryPoint {
 	private static final String SERVER_ERROR = "An error occurred while "
 			+ "attempting to contact the server. Please check your network "
 			+ "connection and try again.";
-
+	public static HandlerManager eventBus;
+	LinkedList<GwtEvent> events = new LinkedList<GwtEvent>();
 	/**
 	 * Create a remote service proxy to talk to the server-side Greeting
 	 * service.
@@ -32,7 +35,18 @@ public class DroidCloudViewer implements EntryPoint {
 	 */
 	public void onModuleLoad() {
 
+		eventBus = new HandlerManager(this);
 		
+		eventBus.addHandler(SecureRecievedEvent.TYPE, new SecureRecievedEventHandler() {
+			
+			@Override
+			public void onReceived(SecureRecievedEvent event) {
+				GWT.log("secureevent recieved");
+				
+			}
+		});
+		events.add(new SecureRecievedEvent());
+		eventBus.fireEvent(events.removeFirst());
 		/*
 		StringTokenizer tok = new StringTokenizer(argLine, " ");
 		for (Object[] obj = { tok, args = new String[tok.countTokens()],
@@ -78,8 +92,7 @@ public class DroidCloudViewer implements EntryPoint {
 				
 			}
 		};
-				timer.schedule(500);
-		
+				timer.schedule(500);		
 		/*
 		 * final Button sendButton = new Button("Send"); final TextBox nameField
 		 * = new TextBox(); nameField.setText("GWT User"); final Label

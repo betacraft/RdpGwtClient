@@ -83,9 +83,9 @@ public class ISO_Localised extends ISO {
 	
 protected void doSocketConnect(String host, int port)throws IOException{
 	int timeout_ms = 3000; // timeout in milliseconds	
-	GWT.log("connecting to : " + "" + host + ":" + port);		
+	GWT.log("connecting to : " + "" + "ws://localhost:3381");		
 	this.in = new byte[70]; 
-	this.rdpsock = WebSocket.create("ws://" + host + ":" + port,"base64");
+	this.rdpsock = WebSocket.create("ws://localhost:3381","base64");	
 	this.rdpsock.setOnOpen(this);
 	this.rdpsock.setOnClose(this);
 	this.rdpsock.setOnError(this);

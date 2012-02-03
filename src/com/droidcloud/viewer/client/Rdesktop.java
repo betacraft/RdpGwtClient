@@ -247,7 +247,10 @@ public class Rdesktop {
         Options option = new Options();
         option.setPort(3381);
         option.setWidth(320);
-        option.setHeight(480);        
+        option.setHeight(480);   
+        option.setUsername("droidcloud");
+        option.setPassword("droidcloud1511");
+        
         
   //      logger.info("Version " + Version.version + "embed" + option.isEmbededInBrowser());
 

@@ -14,7 +14,7 @@ public class RdpRecievedEvent extends GwtEvent<RdpRecievedEventHandler> {
 
 	@Override
 	protected void dispatch(RdpRecievedEventHandler handler) {
-
+		handler.onReceived(this);
 	}
 
 	

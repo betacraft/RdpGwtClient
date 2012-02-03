@@ -14,10 +14,13 @@ package com.droidcloud.viewer.client;
 import java.io.IOException;
 
 import com.droidcloud.viewer.client.crypto.CryptoException;
+import com.droidcloud.viewer.client.events.RdpRecievedEvent;
+import com.droidcloud.viewer.client.events.RdpRecievedEventHandler;
 import com.droidcloud.viewer.client.rdp5.VChannels;
 import com.google.gwt.canvas.dom.client.ImageData;
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.dom.client.Style.Cursor;
+import com.google.gwt.event.shared.HandlerManager;
 
 public class Rdp {
 
@@ -203,7 +206,7 @@ public class Rdp {
 
 	protected Secure SecureLayer = null;
 
-//	private RdesktopFrame frame = null;
+	// private RdesktopFrame frame = null;
 
 	private RdesktopCanvas surface = null;
 
@@ -458,7 +461,7 @@ public class Rdp {
 	private void sendData(RdpPacket_Localised data, int data_pdu_type)
 			throws RdesktopException, IOException, CryptoException {
 
-	//	CommunicationMonitor.lock(this);
+		// CommunicationMonitor.lock(this);
 
 		int length;
 
@@ -479,7 +482,7 @@ public class Rdp {
 
 		SecureLayer.send(data, Constants.encryption ? Secure.SEC_ENCRYPT : 0);
 
-		//CommunicationMonitor.unlock(this);
+		// CommunicationMonitor.unlock(this);
 	}
 
 	/**
@@ -550,6 +553,10 @@ public class Rdp {
 
 	int ext_disc_reason;
 
+	HandlerManager eventBus;
+
+	boolean[] __deactivated;
+	int[] __ext_disc_reason;
 	/**
 	 * RDP receive loop
 	 * 
@@ -564,82 +571,204 @@ public class Rdp {
 	 * @throws OrderException
 	 * @throws CryptoException
 	 */
+	int[] type;
+	int status;
+
 	public void mainLoop(boolean[] deactivated, int[] ext_disc_reason)
 			throws IOException, RdesktopException, OrderException,
 			CryptoException {
-		int[] type = new int[1];
+		type = new int[1];
 
 		boolean disconnect = false; /* True when a disconnect PDU was received */
 		boolean cont = true;
-
+		String username = option.getUsernameImpl();
+		String domain = option.getDomain();
+		String password = option.getPassword();
+		String command = option.getCommand();
+		String directory = option.getDirectory();
+		this.sendLogonInfo(option.getLogonFlags(), domain, username, password,
+				command, directory);
 		RdpPacket_Localised data = null;
+		eventBus = DroidCloudViewer.eventBus;
+		status = 0;
+		eventBus.addHandler(RdpRecievedEvent.TYPE,
+				new RdpRecievedEventHandler() {
 
-		while (cont) {
-			try {
-				data = this.receive(type);
-				if (data == null)
-				{
-					GWT.log("null recieved");
-					return;
-				}
-			} catch (Exception e) {
-				GWT.log("exception: "+e.getMessage()+" "+e.getLocalizedMessage() );
-				return;
-			}
+					@Override
+					public void onReceived(RdpRecievedEvent event) {
+						if (status == 0) {
+							type = new int[1];
 
-			switch (type[0]) {
+							boolean disconnect = false; /*
+														 * True when a
+														 * disconnect PDU was
+														 * received
+														 */
+							boolean cont = true;
+							GWT.log("new packet");
+							RdpPacket_Localised data = null;
+							try {
+								data = receive(type);
+								if (data == null) {
+									GWT.log("null recieved");
+									return;
+								}
+							} catch (Exception e) {
+								GWT.log("exception: " + e.getMessage() + " "
+										+ e.getLocalizedMessage());
+								return;
+							}
 
-			case (Rdp.RDP_PDU_DEMAND_ACTIVE):
-				GWT.log("PDU DEMAND ACTIVE");
-				// logger.debug("Rdp.RDP_PDU_DEMAND_ACTIVE");
-				// get this after licence negotiation, just before the 1st
-				// order...
-				// NDC.push("processDemandActive");
-				this.processDemandActive(data);
-				// can use this to trigger things that have to be done before
-				// 1st order
-				// logger.info("ready to send (got past licence negotiation)");
-				this.isReadyToSendData = true;
-				
-					surface.triggerReadyToSend();
-				
-				// System.out.println("after ready to send");
-				// NDC.pop();
-				deactivated[0] = false;
-				break;
+							if (type[0] == Rdp.RDP_PDU_DEMAND_ACTIVE) {
+								GWT.log("PDU DEMAND ACTIVE");
 
-			case (Rdp.RDP_PDU_DEACTIVATE):
-				GWT.log("Deactive PDU");
-				// get this on log off
-				deactivated[0] = true;
-				// System.out.println("Deactivated pdu..");
-				this.stream = null; // ty this fix
-				break;
+								try {
+									processDemandActive(data);
+								} catch (RdesktopException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								} catch (CryptoException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								} catch (OrderException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
 
-			case (Rdp.RDP_PDU_DATA):
-				GWT.log("PDU Data");
-				// logger.debug("Rdp.RDP_PDU_DATA");
-				// all the others should be this
-				// NDC.push("processData");
-				disconnect = this.processData(data, ext_disc_reason);
-				// s NDC.pop();
-				break;
+							} else if (type[0] == Rdp.RDP_PDU_DEACTIVATE) {
+								GWT.log("Deactive PDU");
+								__deactivated[0] = true;
+								stream = null;
+								commonProcess(disconnect);
+							} else if (type[0] == Rdp.RDP_PDU_DATA) {
+								GWT.log("PDU Data");
 
-			case 0:
-				break; // 32K keep alive fix, see receive() - rdesktop 1.2.0.
+								try {
+									disconnect = processData(data,
+											__ext_disc_reason);
+								} catch (RdesktopException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								} catch (OrderException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+								commonProcess(disconnect);
+							} else if (type[0] == 0) {
+								GWT.log("undefined");
+							}
 
-			default:
-				throw new RdesktopException("Unimplemented type in main loop :"
-						+ type[0]);
-			}
+						}
+						else if(status == 1)
+						{
+							try {
+								receive(type);
+							} catch (IOException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (RdesktopException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (CryptoException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (OrderException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} // Receive RDP_PDU_SYNCHRONIZE
+							SecureLayer.McsLayer.IsoLayer.setListner(type, option, Rdp.this, new RdpRecievedEvent());
+							status = 2;
+						
+						}
+						else if(status == 2)
+						{
+							try {
+								receive(type);
+							} catch (IOException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (RdesktopException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (CryptoException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (OrderException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} // Receive RDP_CTL_COOPERATE
+							SecureLayer.McsLayer.IsoLayer.setListner(type, option, Rdp.this, new RdpRecievedEvent());
+							status = 3;
+						}
+						else if( status == 3)
+						{
+							try {
+								receive(type);
+								sendInput(0, RDP_INPUT_SYNCHRONIZE, 0, 0, 0);
+								sendFonts(1);
+								sendFonts(2);
+							} catch (IOException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (RdesktopException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (CryptoException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (OrderException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} // Receive RDP_CTL_GRANT_CONTROL
+							SecureLayer.McsLayer.IsoLayer.setListner(type, option, Rdp.this, new RdpRecievedEvent());
+							status = 4;							
+						}
+						else if( status == 4)
+						{
+							try {
+								receive(type);
+							} catch (IOException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (RdesktopException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (CryptoException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (OrderException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} // Receive an unknown PDU Code = 0x28
 
-			if (disconnect || !isConnected())
-			{
-				GWT.log("disconnect or not connected : 1"+disconnect+" 2"+isConnected() );
-				return;
-			}
-		}
+							orders.resetOrderState();
+
+							isReadyToSendData = true;
+							surface.triggerReadyToSend();
+							__deactivated[0] = false;
+							commonProcess(false);
+						}
+					}
+				});
+		SecureLayer.McsLayer.IsoLayer.setListner(type, option, this,
+				new RdpRecievedEvent());
+
 		return;
+	}
+
+	void commonProcess(boolean disconnect) {
+		if (disconnect || !isConnected()) {
+			GWT.log("disconnect or not connected : 1" + disconnect + " 2"
+					+ isConnected());
+			return;
+		}
+		status  = 0;
+		SecureLayer.McsLayer.IsoLayer.setListner(type, option, Rdp.this,
+				new RdpRecievedEvent());
+
 	}
 
 	/**
@@ -869,7 +998,8 @@ public class Rdp {
 		this.sendSynchronize();
 		this.sendControl(RDP_CTL_COOPERATE);
 		this.sendControl(RDP_CTL_REQUEST_CONTROL);
-
+		/*this.SecureLayer.McsLayer.IsoLayer.setListner(type, option, Rdp.this, new RdpRecievedEvent());
+		status = 1;
 		this.receive(type); // Receive RDP_PDU_SYNCHRONIZE
 		this.receive(type); // Receive RDP_CTL_COOPERATE
 		this.receive(type); // Receive RDP_CTL_GRANT_CONTROL
@@ -880,7 +1010,7 @@ public class Rdp {
 
 		this.receive(type); // Receive an unknown PDU Code = 0x28
 
-		this.orders.resetOrderState();
+		this.orders.resetOrderState();*/
 	}
 
 	/**
@@ -928,11 +1058,12 @@ public class Rdp {
 			break;
 		case (Rdp.RDP_DATA_PDU_BELL):
 			// logger.debug("Received bell PDU");
-			/*SoundController soundController = new SoundController();
-			Sound sound = soundController.createSound(
-					Sound.MIME_TYPE_AUDIO_MPEG_MP3,
-					"http://droidcloudhq.com/assets/beep.mp3");
-			sound.play();*/
+			/*
+			 * SoundController soundController = new SoundController(); Sound
+			 * sound = soundController.createSound(
+			 * Sound.MIME_TYPE_AUDIO_MPEG_MP3,
+			 * "http://droidcloudhq.com/assets/beep.mp3"); sound.play();
+			 */
 			break;
 		case (Rdp.RDP_DATA_PDU_LOGON):
 			// logger.debug("User logged on");
@@ -1300,7 +1431,7 @@ public class Rdp {
 		} catch (RdesktopException e) {
 			if (isConnected())
 				this.disconnect();
-//			Rdesktop.error(e, frame, false, option);
+			// Rdesktop.error(e, frame, false, option);
 		}
 
 		data.setLittleEndian16(1); /* number of events */
@@ -1331,7 +1462,7 @@ public class Rdp {
 		if (isConnected())
 			this.disconnect();
 		// TODO : send error to outside package
-//		Rdesktop.error(exception, frame, true, option);
+		// Rdesktop.error(exception, frame, true, option);
 	}
 
 	private void sendFonts(int seq) throws RdesktopException, IOException,
@@ -1394,7 +1525,7 @@ public class Rdp {
 		switch (system_pointer_type) {
 		case RDP_NULL_POINTER:
 			// logger.debug("RDP_NULL_POINTER");
-	//		surface.setCursor(null);
+			// surface.setCursor(null);
 			break;
 
 		default:
@@ -1548,7 +1679,7 @@ public class Rdp {
 
 	protected void processPalette(RdpPacket_Localised data) {
 		int n_colors = 0;
-//		IndexColorModel cm = null;
+		// IndexColorModel cm = null;
 		byte[] palette = null;
 
 		byte[] red = null;
@@ -1571,20 +1702,19 @@ public class Rdp {
 			blue[i] = palette[j + 2];
 			j += 3;
 		}
-/*		cm = new IndexColorModel(8, n_colors, red, green, blue);
-		surface.registerPalette(cm);*/
+		/*
+		 * cm = new IndexColorModel(8, n_colors, red, green, blue);
+		 * surface.registerPalette(cm);
+		 */
 	}
 
-/*	public void registerDrawingSurface(RdesktopFrame fr) {
-//		this.frame = fr;
-		RdesktopCanvas ds = fr.getCanvas();
-		this.surface = ds;
-		orders.registerDrawingSurface(ds);
-		fr.registerCommLayer(this);
-	}
-*/
+	/*
+	 * public void registerDrawingSurface(RdesktopFrame fr) { // this.frame =
+	 * fr; RdesktopCanvas ds = fr.getCanvas(); this.surface = ds;
+	 * orders.registerDrawingSurface(ds); fr.registerCommLayer(this); }
+	 */
 	public void registerDrawingSurface(RdesktopCanvas canvas) {
-//		this.frame = null;
+		// this.frame = null;
 		this.surface = canvas;
 		orders.registerDrawingSurface(canvas);
 		canvas.registerCommLayer(this);
@@ -1604,7 +1734,7 @@ public class Rdp {
 			throws RdesktopException {
 		// FIXME: We should probably set another cursor here,
 		// like the X window system base cursor or something.
-//		surface.setCursor(cache.getCursor(0));
+		// surface.setCursor(cache.getCursor(0));
 	}
 
 	protected void process_colour_pointer_pdu(RdpPacket_Localised data)
@@ -1627,11 +1757,11 @@ public class Rdp {
 		data.incrementPosition(datalen);
 		data.copyToByteArray(mask, 0, data.getPosition(), masklen);
 		data.incrementPosition(masklen);
-//		cursor = surface.createCursor(x, y, width, height, mask, pixel,
-//				cache_idx);
+		// cursor = surface.createCursor(x, y, width, height, mask, pixel,
+		// cache_idx);
 		// //logger.info("Creating and setting cursor " + cache_idx);
-//		surface.setCursor(cursor);
-	//	cache.putCursor(cache_idx, cursor);
+		// surface.setCursor(cursor);
+		// cache.putCursor(cache_idx, cursor);
 	}
 
 	protected void process_cached_pointer_pdu(RdpPacket_Localised data)
@@ -1639,7 +1769,7 @@ public class Rdp {
 		// logger.debug("Rdp.RDP_POINTER_CACHED");
 		int cache_idx = data.getLittleEndian16();
 		// //logger.info("Setting cursor "+cache_idx);
-//		surface.setCursor(cache.getCursor(cache_idx));
+		// surface.setCursor(cache.getCursor(cache_idx));
 	}
 
 	/**
@@ -1662,12 +1792,14 @@ public class Rdp {
 		try {
 			SecureLayer.connect(server, this);
 			this.connected = true;
-			this.sendLogonInfo(flags, domain, username, password, command,
-					directory);
+			/*
+			 * this.sendLogonInfo(flags, domain, username, password, command,
+			 * directory);
+			 */
 
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
-//			e.printStackTrace();
+			// e.printStackTrace();
 		}
 		/*
 		 * } catch (UnknownHostException e) { // Handle an unresolvable hostname

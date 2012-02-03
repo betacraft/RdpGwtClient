@@ -19,6 +19,8 @@ package com.droidcloud.viewer.client.tools;
 
 import java.math.BigInteger;
 
+import com.google.gwt.core.client.GWT;
+
 /**
  * Provides Base64 encoding and decoding as defined by <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC 2045</a>.
  * 
@@ -646,7 +648,7 @@ public class Base64 extends BaseNCodec {
         // Create this so can use the super-class method
         // Also ensures that the same roundings are performed by the ctor and the code
         Base64 b64 = isChunked ? new Base64(urlSafe) : new Base64(0, CHUNK_SEPARATOR, urlSafe);
-        long len = b64.getEncodedLength(binaryData);
+        long len = b64.getEncodedLength(binaryData);        
         if (len > maxResultSize) {
             throw new IllegalArgumentException("Input array too big, the output array would be bigger (" +
                 len +
