@@ -100,7 +100,7 @@ public class MCS {
 					GWT.log("message: -1");
 					sendConnectInitial(pack);
 					status = 0;
-					IsoLayer.setListner(new int[1], option, rdpL, new McsRecievedEvent());
+					IsoLayer.setListner(new int[1], option, rdpL, new McsRecievedEvent());					
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
@@ -116,6 +116,7 @@ public class MCS {
 					receiveConnectResponse(pack, rdpL);
 					send_edrq();
 					send_aurq();
+					GWT.log("----------message0 sent, waiting for response-----------");
 					status = 1;
 					IsoLayer.setListner(new int[1], option, rdpL, new McsRecievedEvent());
 				} catch (IOException e) {
@@ -296,6 +297,8 @@ public class MCS {
 	buffer.setBigEndian16(channel);
 	buffer.set8(0x70); //Flags
 	buffer.setBigEndian16(length);
+	GWT.log("----------------MCSlayer packet------------------------");
+	HexDump.printBuffer(buffer);
 	IsoLayer.send(buffer, option);
     }
 
@@ -481,6 +484,7 @@ public class MCS {
     public void sendConnectInitial(RdpPacket_Localised data) throws IOException, RdesktopException {
         //logger.debug("MCS.sendConnectInitial");
     	GWT.log("MCS.sendConnectInitial");
+    	
     if(false){
         int length = 7 + (3 *34) + 4 + data.getEnd();
         RdpPacket_Localised buffer = IsoLayer.init(length+5);

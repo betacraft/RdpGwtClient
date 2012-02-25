@@ -246,11 +246,10 @@ public class Rdesktop {
        String server = "127.0.0.1";
         Options option = new Options();
         option.setPort(3381);
-        option.setWidth(320);
-        option.setHeight(480);   
-        option.setUsername("droidcloud");
-        option.setPassword("droidcloud1511");
-        
+        option.setWidth(800);
+        option.setHeight(600);   
+//        option.setUsername("droidcloud");
+//        option.setPassword("droidcloud1511");        
         
   //      logger.info("Version " + Version.version + "embed" + option.isEmbededInBrowser());
 
@@ -309,7 +308,7 @@ public class Rdesktop {
         canvas.registerKeyboard(keyMap);
 
      //   logger.debug("Registering keyboard...");
-        option.setKeylayout(keyMap.getMapCode()); 
+     //   option.setKeylayout(keyMap.getMapCode()); 
         GWT.log("create runner");
         runner = new RdesktopRunner.RdesktopCanvasRunner(option, canvas);
         GWT.log("run rdp");
@@ -322,7 +321,7 @@ public class Rdesktop {
             runner.run(server, secureLayer);
         }
         logger.info("Exit main");
-*/        exit(0, true,  option);
+*/     //   exit(0, true,  option);
     }
 
 }

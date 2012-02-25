@@ -586,8 +586,11 @@ public class Rdp {
 		String password = option.getPassword();
 		String command = option.getCommand();
 		String directory = option.getDirectory();
+		GWT.log("sending logon info");
 		this.sendLogonInfo(option.getLogonFlags(), domain, username, password,
 				command, directory);
+		GWT.log("logon info sent");
+		option.disableEncryptionIfPacketEncyptionNotEnabled();
 		RdpPacket_Localised data = null;
 		eventBus = DroidCloudViewer.eventBus;
 		status = 0;
@@ -596,6 +599,7 @@ public class Rdp {
 
 					@Override
 					public void onReceived(RdpRecievedEvent event) {
+						GWT.log("----------------RDP received event");
 						if (status == 0) {
 							type = new int[1];
 
@@ -807,10 +811,9 @@ public class Rdp {
 		int dirlen = 2 * directory.length();
 
 		RdpPacket_Localised data;
-
+		GWT.log("------------should use RDP5:"+option.shouldUseRdp5()+" AND server version = "+option.getServerRdpVersion()+"-----------");
 		if (!option.shouldUseRdp5() || 1 == option.getServerRdpVersion()) {
-			// logger.debug("Sending RDP4-style Logon packet");
-
+			// logger.debug("Sending RDP4-style Logon packet");			
 			data = SecureLayer.init(sec_flags, 18 + domainlen + userlen
 					+ passlen + commandlen + dirlen + 10);
 
@@ -970,8 +973,9 @@ public class Rdp {
 		}
 
 		data.markEnd();
-		byte[] buffer = new byte[data.getEnd()];
+		byte[] buffer = new byte[data.getEnd()];		
 		data.copyToByteArray(buffer, 0, 0, data.getEnd());
+		GWT.log("---------RDP logon packet"+HexDump.encoder(buffer));
 		SecureLayer.send(data, sec_flags);
 	}
 

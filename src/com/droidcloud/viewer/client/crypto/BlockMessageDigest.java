@@ -14,6 +14,7 @@ package com.droidcloud.viewer.client.crypto;
  * @author  David Hopwood
  * @since   Cryptix 2.2.2
  */
+
 public abstract class BlockMessageDigest
 {
     /**

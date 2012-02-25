@@ -200,6 +200,7 @@ public class RdpPacket_Localised extends RdpPacket {
 
 	public void setLittleEndian32(int what)  {
 		bb.order(ByteOrder.LITTLE_ENDIAN);
+		
 		bb.putInt(what);
 	}
 	

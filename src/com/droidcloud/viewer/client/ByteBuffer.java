@@ -23,7 +23,7 @@ public class ByteBuffer {
 		ByteBuffer bb = new ByteBuffer();
 		bb.barray = new ArrayList<Byte>(capacity);
 		for (int i = 0; i < capacity; i++)
-			bb.barray.add((byte) 0);
+			bb.barray.add((byte) 0x00);
 		GWT.log("" + capacity);
 		bb.capacity = capacity;
 		bb.currentPosition = 0;
@@ -124,8 +124,11 @@ public class ByteBuffer {
 	public void putShort(int where, short what) {
 		byte first;
 		byte second;
-		first = (byte) (what & 0x0f);
-		second = (byte) ((what >> 8) & 0xf);
+		/*
+		 * first = (byte) (what & 0x0f); second = (byte) ((what >> 8) & 0x0f);
+		 */
+		second = short1(what);
+		first = short0(what);
 		/*
 		 * GWT.log("currentpos " + currentPosition + " putting short at " +
 		 * where + " size " + barray.size());
@@ -182,15 +185,19 @@ public class ByteBuffer {
 		return r;
 	}
 
-	public void putInt(int where, int what) {
+	public void putInt(int where, int what) {		
 		byte first;
 		byte second;
 		byte third;
 		byte fourth;
-		first = (byte) (what & 0x0f);
-		second = (byte) ((what >> 8) & 0xf);
-		third = (byte) ((what >> 16) & 0xf);
-		fourth = (byte) ((what >> 24) & 0xf);
+		/*first = (byte) (what >> 0);
+		second = (byte) ((what >> 8));
+		third = (byte) ((what >> 16));
+		fourth = (byte) ((what >> 24));*/
+		first = int0(what);
+		second = int1(what);
+		third = int2(what);
+		fourth = int3(what);
 		if (ORDER == BIG_ENDIAN32) {
 			barray.set(where, fourth);
 			barray.set(where + 3, third);
@@ -206,11 +213,36 @@ public class ByteBuffer {
 
 	public void putInt(int what) {
 		putInt(currentPosition, what);
+		
 		currentPosition += 4;
+		
 	}
 
 	public void position(int i) {
 		currentPosition = i;
 	}
 
+	private static byte short1(short x) {
+		return (byte) (x >> 8);
+	}
+
+	private static byte short0(short x) {
+		return (byte) (x >> 0);
+	}
+
+	private static byte int3(int x) {
+		return (byte) (x >> 24);
+	}
+
+	private static byte int2(int x) {
+		return (byte) (x >> 16);
+	}
+
+	private static byte int1(int x) {
+		return (byte) (x >> 8);
+	}
+
+	private static byte int0(int x) {
+		return (byte) (x >> 0);
+	}
 }

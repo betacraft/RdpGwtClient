@@ -27,6 +27,7 @@ import com.droidcloud.viewer.client.events.RecieveMessageEventHandler;
 import com.droidcloud.viewer.client.events.SecureRecievedEvent;
 import com.droidcloud.viewer.client.events.SecureRecievedEventHandler;
 import com.droidcloud.viewer.client.rdp5.VChannels;
+import com.droidcloud.viewer.client.tools.Base64;
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.event.shared.HandlerManager;
 
@@ -159,7 +160,11 @@ public class Secure {
 			option.getHostname().trim();
 		}
 
-		_mcs_data = this.sendMcsData();
+		_mcs_data = this.sendMcsData();		
+		GWT.log("MCS data: ");
+		byte [] tmpMcs = new byte[_mcs_data.size()];
+		_mcs_data.copyToByteArray(tmpMcs, 0, 0, _mcs_data.size());
+		GWT.log("hexdump: "+HexDump.encoder(tmpMcs));
 		McsLayer.connect(host, port, _mcs_data, rdpLayer);
 		eventBus.addHandler(SecureRecievedEvent.TYPE,
 				new SecureRecievedEventHandler() {
@@ -167,10 +172,12 @@ public class Secure {
 					@Override
 					public void onReceived(SecureRecievedEvent event) {
 						try {
+							GWT.log("---------------------------------processing mcsdata in secure");
+						
 							processMcsData(_mcs_data);
 							if (Constants.encryption) {
 								establishKey();
-							}
+							}							
 							eventBus.fireEvent(new ReceiveMessageEvent());
 						} catch (RdesktopException e) {
 							// TODO Auto-generated catch block
@@ -239,6 +246,8 @@ public class Secure {
 		buffer.set8(0x7c);
 		buffer.setBigEndian16(1);
 
+		HexDump.printBuffer(buffer);
+		GWT.log("-------------------length|0x8000"+ (length | 0x8000)+" length:"+length);
 		buffer.setBigEndian16(length | 0x8000); // remaining length
 
 		buffer.setBigEndian16(8); // length?
@@ -246,20 +255,29 @@ public class Secure {
 		buffer.set8(0);
 		buffer.setLittleEndian16(0xc001);
 		buffer.set8(0);
+		
+		HexDump.printBuffer(buffer);
 
 		buffer.setLittleEndian32(0x61637544); // "Duca" ?!
 		buffer.setBigEndian16(length - 14 | 0x8000); // remaining length
-		GWT.log("length:"+buffer.getPosition());
+		GWT.log("--------length:"+length);
+		
+		HexDump.printBuffer(buffer);
 		// Client information
 		buffer.setLittleEndian16(SEC_TAG_CLI_INFO);
 		buffer.setLittleEndian16(option.shouldUseRdp5() ? 212 : 136); // length
 		buffer.setLittleEndian16(option.shouldUseRdp5() ? 4 : 1);
 		buffer.setLittleEndian16(8);
+				
 		buffer.setLittleEndian16(option.getWidth());
 		buffer.setLittleEndian16(option.getHeight());
 		buffer.setLittleEndian16(0xca01);
 		buffer.setLittleEndian16(0xaa03);
-		buffer.setLittleEndian32(option.getKeylayout());
+		HexDump.printBuffer(buffer);
+		GWT.log("keylayout: "+option.getKeylayout());
+		
+		// hardcoding keylayout
+		buffer.setLittleEndian32(/*option.getKeylayout()*/ 1033);
 		buffer.setLittleEndian32(option.shouldUseRdp5() ? 2600 : 419); // or
 																		// 0ece
 																		// //
@@ -270,9 +288,12 @@ public class Secure {
 																		// 2600
 																		// compatible
 																		// :-)
+		
 		GWT.log("length:"+buffer.getPosition());
 		/* Unicode name of client, padded to 32 bytes */
+		HexDump.printBuffer(buffer);
 		buffer.outUnicodeString(option.getHostname().toUpperCase(), hostlen);
+		GWT.log("hostlength: "+hostlen +" hostname: "+option.getHostname());
 		buffer.incrementPosition(30 - hostlen);
 
 		buffer.setLittleEndian32(4);
@@ -380,12 +401,14 @@ public class Secure {
 
 			switch (tag) {
 			case (Secure.SEC_TAG_SRV_INFO):
+				GWT.log("------------------processing server info------------------");
 				processSrvInfo(mcs_data);
 				break;
 			case (Secure.SEC_TAG_SRV_CRYPT):
+				GWT.log("------------------processing crypt info------------------");
 				this.processCryptInfo(mcs_data);
 				break;
-			case (Secure.SEC_TAG_SRV_CHANNELS):
+			case (Secure.SEC_TAG_SRV_CHANNELS):				
 				/*
 				 * FIXME: We should parse this information and use it to map
 				 * RDP5 channels to MCS channels
@@ -560,14 +583,24 @@ public class Secure {
 					datalength);
 			signature = this.sign(this.sec_sign_key, 8, this.keylength, data,
 					datalength);
-
+			GWT.log("----------signature length:"+signature.length);
+			
+			
 			buffer = this.encrypt(data, datalength);
-
+			GWT.log("data for signature: "+HexDump.encoder(data));
+			GWT.log("-------------Signature----------------------");
+			GWT.log(""+HexDump.encoder(signature));
+			GWT.log("-------------encrypted buffer----------------------");
+			GWT.log("------------------------buffer length: "+buffer.length);
+			
 			sec_data.copyFromByteArray(signature, 0, sec_data.getPosition(), 8);
 			sec_data.copyFromByteArray(buffer, 0, sec_data.getPosition() + 8,
 					datalength);
 
 		}
+		GWT.log("datalength: "+datalength);
+		GWT.log("----------------securelayer packet------------------------");
+		HexDump.printBuffer(sec_data);
 		// McsLayer.send(sec_data);
 		McsLayer.send_to_channel(sec_data, channel);
 	}
@@ -603,6 +636,7 @@ public class Secure {
 		sha1.engineUpdate(lenhdr, 0, 4);
 		sha1.engineUpdate(data, 0, datalength);
 		shasig = sha1.engineDigest();
+		GWT.log("----------shasig: "+HexDump.encoder(shasig)+"length: "+shasig.length);
 		sha1.engineReset();
 
 		md5.engineReset();
@@ -611,7 +645,9 @@ public class Secure {
 		md5.engineUpdate(shasig, 0, 20);
 		md5sig = md5.engineDigest();
 		md5.engineReset();
-
+		GWT.log("----------md5sig: "+ HexDump.encoder(md5sig)+"length: "+md5sig.length);
+		
+		
 		System.arraycopy(md5sig, 0, signature, 0, length);
 		return signature;
 	}

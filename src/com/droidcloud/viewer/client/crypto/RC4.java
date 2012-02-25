@@ -94,9 +94,10 @@ public final class RC4 { // must be final for security reasons
      * Always throws a CloneNotSupportedException (cloning of ciphers is not
      * supported for security reasons).
      */
-/*    public final Object clone() throws CloneNotSupportedException {
-        throw new CloneNotSupportedException();
-    }*/
+    public final Object clone()  {
+		return null;
+        
+    }
 
 
 // Implementation of JCE methods

@@ -12,6 +12,8 @@
  */
 package com.droidcloud.viewer.client;
 
+import com.google.gwt.core.client.GWT;
+
 
 
 public class HexDump {
@@ -29,11 +31,11 @@ public class HexDump {
      * @param data Array of byte data to be encoded
      * @param msg Message to include with outputted hex debug messages
      */
-    public void encode(byte[] data, String msg/*PrintStream out*/) {
+    public static  String encode(byte[] data) {
 	int count = 0;
-	String index;
+	String index = null;
 	String number;
-	
+	String packet = "";
 	//logger.debug(msg);
 	
 	while(count < data.length) {
@@ -63,7 +65,7 @@ public class HexDump {
 	    case(8):
 		break;
 	    default:
-		return;
+		return (packet+=index );
 	    }
 	    
 	    index += ": ";
@@ -82,15 +84,35 @@ public class HexDump {
 		default:
 		    //logger.debug(index);
 		    //out.println("");
-		    return;
+		    return (packet+=index );
 		}   
 		index+= (number + " "); 
 		//out.print(number + " ");
+		packet+=index;
 		count++;
 	    }
+	//    GWT.log("hexdump: "+index);
 	    //logger.debug(index);
 	    //out.println("");
+	    
 	}
-	
+	return packet;
+    }
+    
+    public static  String encoder(byte[] data) {
+    	int length = data.length;
+    	String hex = "";
+    	for(int i=0;i<length;i++)
+    	{
+    		hex += Integer.toHexString(data[i]&0xff);
+    	}
+    	return hex;
+    }
+    
+    public static void printBuffer(RdpPacket_Localised buffer)
+    {
+    	byte [] tmpMcs = new byte[buffer.size()];
+		buffer.copyToByteArray(tmpMcs, 0, 0, buffer.size());
+		GWT.log("hexdump: "+HexDump.encoder(tmpMcs));
     }
 }
